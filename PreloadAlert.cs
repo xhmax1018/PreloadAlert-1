@@ -19,8 +19,8 @@ namespace PreloadAlert
 {
     public class PreloadAlert : BaseSettingsPlugin<PreloadAlertSettings>
     {
-        private const string PRELOAD_ALERTS = "config/preload_alerts.txt";
-        private const string PRELOAD_ALERTS_PERSONAL = "config/preload_alerts_personal.txt";
+        private string PRELOAD_ALERTS => Path.Combine(DirectoryFullName,"config","preload_alerts.txt");
+        private string PRELOAD_ALERTS_PERSONAL => Path.Combine(DirectoryFullName, "config", "preload_alerts_personal.txt");
         public static Dictionary<string, PreloadConfigLine> Essences;
         public static Dictionary<string, PreloadConfigLine> PerandusLeague;
         public static Dictionary<string, PreloadConfigLine> Strongboxes;
@@ -45,7 +45,7 @@ namespace PreloadAlert
 
         public PreloadAlert()
         {
-            Order = -40;
+            Order = -40;            
         }
 
         private Dictionary<string, PreloadConfigLine> alerts { get; } = new Dictionary<string, PreloadConfigLine>();
@@ -224,7 +224,7 @@ namespace PreloadAlert
 
         public override void OnLoad()
         {
-            alertStrings = LoadConfig("config/preload_alerts.txt");
+            alertStrings = LoadConfig(PRELOAD_ALERTS);
             SetupPredefinedConfigs();
             Graphics.InitImage("preload-start.png");
             Graphics.InitImage("preload-end.png");
