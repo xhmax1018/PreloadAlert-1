@@ -272,117 +272,47 @@ namespace PreloadAlert
 
         private IEnumerator Parse()
         {
-            if (!working)
-            {
-                working = true;
-                PreloadDebug.Clear();
+            if (working) yield return null;
 
-                Task.Run(() =>
+            working = true;
+            PreloadDebug.Clear();
+
+            Task.Run(() =>
+            {
+                debugInformation.TickAction(() =>
                 {
-                    debugInformation.TickAction(() =>
+                    try
                     {
                         var memory = GameController.Memory;
-                        var pFileRoot = memory.AddressOfProcess + memory.BaseOffsets[OffsetsName.FileRoot];
-                        var count = memory.Read<int>(pFileRoot + 0x10); // check how many files are loaded
-                        var areaChangeCount = GameController.Game.AreaChangeCount;
-                        var listIterator = memory.Read<long>(pFileRoot + 0x8, 0x0);
-                        filesPtr.Clear();
-
-                        for (var i = 0; i < count; i++)
+                        FilesFromMemory filesFromMemory = new FilesFromMemory(memory);
+                        var allFiles = filesFromMemory.GetAllFiles();
+                        foreach (var file in allFiles)
                         {
-                            listIterator = memory.Read<long>(listIterator);
+                            if (file.Value.ChangeCount != GameController.Game.AreaChangeCount) continue;
+                                
+                            var text = file.Key;
+                            if (text.Contains('@')) text = text.Split('@')[0];
 
-                            if (listIterator == 0)
+                            lock (_locker)
                             {
-                                //MessageBox.Show("address is null, something has gone wrong, start over");
-                                // address is null, something has gone wrong, start over
-                                break;
+                                PreloadDebug.Add(text);
                             }
-
-                            filesPtr.Add(listIterator);
+                            CheckForPreload(text);                                
                         }
+                    }
+                    catch (Exception e)
+                    {
+                        DebugWindow.LogError($"{nameof(PreloadAlert)} -> {e}");
+                    }
 
-                        if (Settings.ParallelParsing)
-                        {
-                            Parallel.ForEach(filesPtr, (iter, state) =>
-                            {
-                                try
-                                {
-                                    var fileAddr = memory.Read<long>(iter + 0x18);
-
-                                    //some magic number
-
-                                    if (memory.Read<long>(iter + 0x10) != 0 && memory.Read<int>(fileAddr + 0x38) == areaChangeCount)
-                                    {
-                                        var size = memory.Read<int>(fileAddr + 0x20);
-                                        if (size < 7) return;
-
-                                        var fileNamePointer = memory.Read<long>(iter + 0x10);
-
-                                        var text = RemoteMemoryObject.Cache.StringCache.Read($"{nameof(PreloadAlert)}{fileNamePointer}",
-                                            () => memory.ReadStringU(
-                                                fileNamePointer, size * 2));
-
-                                        if (Settings.LoadOnlyMetadata && text[0] != 'M') return;
-                                        if (text.Contains('@')) text = text.Split('@')[0];
-
-                                        lock (_locker)
-                                        {
-                                            PreloadDebug.Add(text);
-                                        }
-
-                                        CheckForPreload(text);
-                                    }
-                                }
-                                catch (Exception e)
-                                {
-                                    DebugWindow.LogError($"{nameof(PreloadAlert)} -> {e}");
-                                }
-                            });
-                        }
-                        else
-                        {
-                            string text;
-
-                            foreach (var iter in filesPtr)
-                            {
-                                try
-                                {
-                                    var fileAddr = memory.Read<long>(iter + 0x18);
-
-                                    if (memory.Read<long>(iter + 0x10) != 0 && memory.Read<int>(fileAddr + 0x38) == areaChangeCount)
-                                    {
-                                        var size = memory.Read<int>(fileAddr + 0x20);
-                                        if (size < 7) continue;
-
-                                        var fileNamePointer = memory.Read<long>(iter + 0x10);
-
-                                        text = RemoteMemoryObject.Cache.StringCache.Read($"{nameof(PreloadAlert)}{fileNamePointer}",
-                                            () => memory.ReadStringU(
-                                                fileNamePointer, size * 2));
-
-                                        if (Settings.LoadOnlyMetadata && text[0] != 'M') continue;
-                                        if (text.Contains('@')) text = text.Split('@')[0];
-                                        PreloadDebug.Add(text);
-                                        CheckForPreload(text);
-                                    }
-                                }
-                                catch (Exception e)
-                                {
-                                    DebugWindow.LogError($"{nameof(PreloadAlert)} -> {e}");
-                                }
-                            }
-                        }
-
-                        lock (_locker)
-                        {
-                            DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
-                        }
-                    });
-
-                    working = false;
+                    lock (_locker)
+                    {
+                        DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                    }
                 });
-            }
+
+                working = false;
+            });            
 
             yield return null;
         }
