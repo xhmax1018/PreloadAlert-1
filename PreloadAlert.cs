@@ -31,7 +31,7 @@ namespace PreloadAlert
         private Dictionary<string, PreloadConfigLine> alertStrings;
         private bool canRender;
         private DebugInformation debugInformation;
-        private List<PreloadConfigLine> DrawAlers = new List<PreloadConfigLine>();
+        private List<PreloadConfigLine> DrawAlerts = new List<PreloadConfigLine>();
         private bool essencefound;
         private readonly List<long> filesPtr = new List<long>();
         private bool foundSpecificPerandusChest;
@@ -84,7 +84,7 @@ namespace PreloadAlert
 
                     lock (_locker)
                     {
-                        DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                        DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                     }
                 });
 
@@ -169,7 +169,7 @@ namespace PreloadAlert
                     {
                         if (ImGui.TreeNode("DrawAlerts"))
                         {
-                            foreach (var alert in DrawAlers)
+                            foreach (var alert in DrawAlerts)
                             {
                                 ImGui.TextColored((alert.FastColor?.Invoke() ?? alert.Color ?? Settings.DefaultTextColor).ToImguiVec4(),
                                     $"{alert.Text}");
@@ -206,7 +206,7 @@ namespace PreloadAlert
 
                         lock (_locker)
                         {
-                            DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                            DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                         }
                     }
                 });
@@ -217,7 +217,7 @@ namespace PreloadAlert
 
                 lock (_locker)
                 {
-                    DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                    DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                 }
             }
         }
@@ -257,7 +257,7 @@ namespace PreloadAlert
 
             lock (_locker)
             {
-                DrawAlers.Clear();
+                DrawAlerts.Clear();
             }
             PreloadDebugAction = null;
             if (GameController.Area.CurrentArea.IsHideout && !Settings.ShowInHideout)
@@ -306,7 +306,7 @@ namespace PreloadAlert
 
                     lock (_locker)
                     {
-                        DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                        DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                     }
                 });
 
@@ -369,7 +369,7 @@ namespace PreloadAlert
             }
             else
             {
-                foreach (var line in DrawAlers)
+                foreach (var line in DrawAlerts)
                 {
                     lastLine = Graphics.DrawText(line.Text, startDrawPoint,
                         line.FastColor?.Invoke() ?? line.Color ?? Settings.DefaultTextColor, FontAlign.Right);
