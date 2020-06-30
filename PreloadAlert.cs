@@ -283,9 +283,8 @@ namespace PreloadAlert
                 {
                     try
                     {
-                        var memory = GameController.Memory;
-                        FilesFromMemory filesFromMemory = new FilesFromMemory(memory);
-                        var allFiles = filesFromMemory.GetAllFiles();
+                        GameController.Files.ReloadFiles();
+                        var allFiles = GameController.Files.AllFiles;
                         foreach (var file in allFiles)
                         {
                             if (file.Value.ChangeCount != GameController.Game.AreaChangeCount) continue;
