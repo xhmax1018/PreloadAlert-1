@@ -540,3 +540,13 @@ Metadata/Monsters/AtlasExiles/AtlasExile3Influence_; Al-Hezmin1; ff36B400
 Metadata/Monsters/AtlasExiles/AtlasExile3Influence; Al-Hezmin2; ff36B400
 Metadata/Monsters/AtlasExiles/AtlasExile4Influence_; Drox1; ff36B400
 Metadata/Monsters/AtlasExiles/AtlasExile4Influence; Drox2; ff36B400
+
+# METAMORPH
+Metadata/NPC/League/Metamorphosis/MetamorphosisNPCWild; Metamorph; ff36B400
+#Metadata/MiscellaneousObjects/Metamorphosis/MetamorphosisVat
+
+# DELIRIUM
+Metadata/MiscellaneousObjects/Affliction/AfflictionInitiator; Delirium; ff36B400
+
+# HARVEST
+#Metadata/Terrain/Leagues/Harvest/Objects/HarvestFeatureChest; Harvest; ff36B400
