@@ -223,6 +223,7 @@ Metadata/Terrain/Leagues/Harvest/harvest_encounter.arm; Harvest; ff36B400
 # HEIST
 Metadata/Chests/LeagueHeist/HeistSmugglersCoinCache; Heist; ffcfb109
 Metadata/Chests/LeagueHeist/HeistSmugglersCoinCacheOutdoors; Heist; ffcfb109
+Metadata/Terrain/Leagues/Heist/Objects/CoinPortal; Heist; ff00FF00
 
 ###################################################################################################
 #
