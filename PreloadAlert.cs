@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -19,8 +19,8 @@ namespace PreloadAlert
 {
     public class PreloadAlert : BaseSettingsPlugin<PreloadAlertSettings>
     {
-        private string PRELOAD_ALERTS => Path.Combine(DirectoryFullName,"config","preload_alerts.txt");
-        private string PRELOAD_ALERTS_PERSONAL => Path.Combine(DirectoryFullName, "config", "preload_alerts_personal.txt");
+        private const string PRELOAD_ALERTS = "config/preload_alerts.txt";
+        private const string PRELOAD_ALERTS_PERSONAL = "config/preload_alerts_personal.txt";
         public static Dictionary<string, PreloadConfigLine> Essences;
         public static Dictionary<string, PreloadConfigLine> PerandusLeague;
         public static Dictionary<string, PreloadConfigLine> Strongboxes;
@@ -31,10 +31,12 @@ namespace PreloadAlert
         private Dictionary<string, PreloadConfigLine> alertStrings;
         private bool canRender;
         private DebugInformation debugInformation;
-        private List<PreloadConfigLine> DrawAlerts = new List<PreloadConfigLine>();
+        private List<PreloadConfigLine> DrawAlers = new List<PreloadConfigLine>();
         private bool essencefound;
         private readonly List<long> filesPtr = new List<long>();
         private bool foundSpecificPerandusChest;
+        private bool holdKey = false;
+        private bool isAreaChanged = false;
         private bool isLoading;
         private Vector2 lastLine;
         private float maxWidth;
@@ -45,7 +47,7 @@ namespace PreloadAlert
 
         public PreloadAlert()
         {
-            Order = -40;            
+            Order = -40;
         }
 
         private Dictionary<string, PreloadConfigLine> alerts { get; } = new Dictionary<string, PreloadConfigLine>();
@@ -84,7 +86,7 @@ namespace PreloadAlert
 
                     lock (_locker)
                     {
-                        DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                        DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                     }
                 });
 
@@ -169,7 +171,7 @@ namespace PreloadAlert
                     {
                         if (ImGui.TreeNode("DrawAlerts"))
                         {
-                            foreach (var alert in DrawAlerts)
+                            foreach (var alert in DrawAlers)
                             {
                                 ImGui.TextColored((alert.FastColor?.Invoke() ?? alert.Color ?? Settings.DefaultTextColor).ToImguiVec4(),
                                     $"{alert.Text}");
@@ -206,7 +208,7 @@ namespace PreloadAlert
 
                         lock (_locker)
                         {
-                            DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                            DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                         }
                     }
                 });
@@ -217,14 +219,14 @@ namespace PreloadAlert
 
                 lock (_locker)
                 {
-                    DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                    DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
                 }
             }
         }
 
         public override void OnLoad()
         {
-            alertStrings = LoadConfig(PRELOAD_ALERTS);
+            alertStrings = LoadConfig("config/preload_alerts.txt");
             SetupPredefinedConfigs();
             Graphics.InitImage("preload-start.png");
             Graphics.InitImage("preload-end.png");
@@ -257,7 +259,7 @@ namespace PreloadAlert
 
             lock (_locker)
             {
-                DrawAlerts.Clear();
+                DrawAlers.Clear();
             }
             PreloadDebugAction = null;
             if (GameController.Area.CurrentArea.IsHideout && !Settings.ShowInHideout)
@@ -272,46 +274,117 @@ namespace PreloadAlert
 
         private IEnumerator Parse()
         {
-            if (working) yield return null;
-
-            working = true;
-            PreloadDebug.Clear();
-
-            Task.Run(() =>
+            if (!working)
             {
-                debugInformation.TickAction(() =>
+                working = true;
+                PreloadDebug.Clear();
+
+                Task.Run(() =>
                 {
-                    try
+                    debugInformation.TickAction(() =>
                     {
-                        GameController.Files.ReloadFiles();
-                        var allFiles = GameController.Files.AllFiles;
-                        foreach (var file in allFiles)
+                        var memory = GameController.Memory;
+                        var pFileRoot = memory.AddressOfProcess + memory.BaseOffsets[OffsetsName.FileRoot];
+                        var count = memory.Read<int>(pFileRoot + 0x10); // check how many files are loaded
+                        var areaChangeCount = GameController.Game.AreaChangeCount;
+                        var listIterator = memory.Read<long>(pFileRoot + 0x8, 0x0);
+                        filesPtr.Clear();
+
+                        for (var i = 0; i < count; i++)
                         {
-                            if (file.Value.ChangeCount != GameController.Game.AreaChangeCount) continue;
-                                
-                            var text = file.Key;
-                            if (text.Contains('@')) text = text.Split('@')[0];
+                            listIterator = memory.Read<long>(listIterator);
 
-                            lock (_locker)
+                            if (listIterator == 0)
                             {
-                                PreloadDebug.Add(text);
+                                //MessageBox.Show("address is null, something has gone wrong, start over");
+                                // address is null, something has gone wrong, start over
+                                break;
                             }
-                            CheckForPreload(text);                                
+
+                            filesPtr.Add(listIterator);
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        DebugWindow.LogError($"{nameof(PreloadAlert)} -> {e}");
-                    }
 
-                    lock (_locker)
-                    {
-                        DrawAlerts = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
-                    }
+                        if (Settings.ParallelParsing)
+                        {
+                            Parallel.ForEach(filesPtr, (iter, state) =>
+                            {
+                                try
+                                {
+                                    var fileAddr = memory.Read<long>(iter + 0x18);
+
+                                    //some magic number
+
+                                    if (memory.Read<long>(iter + 0x10) != 0 && memory.Read<int>(fileAddr + 0x40) == areaChangeCount)
+                                    {
+                                        var size = memory.Read<int>(fileAddr + 0x20);
+                                        if (size < 7) return;
+
+                                        var fileNamePointer = memory.Read<long>(iter + 0x10);
+
+                                        var text = RemoteMemoryObject.Cache.StringCache.Read($"{nameof(PreloadAlert)}{fileNamePointer}",
+                                            () => memory.ReadStringU(
+                                                fileNamePointer, size * 2));
+
+                                        if (Settings.LoadOnlyMetadata && text[0] != 'M') return;
+                                        if (text.Contains('@')) text = text.Split('@')[0];
+
+                                        lock (_locker)
+                                        {
+                                            PreloadDebug.Add(text);
+                                        }
+
+                                        CheckForPreload(text);
+                                    }
+                                }
+                                catch (Exception e)
+                                {
+                                    DebugWindow.LogError($"{nameof(PreloadAlert)} -> {e}");
+                                }
+                            });
+                        }
+                        else
+                        {
+                            string text;
+
+                            foreach (var iter in filesPtr)
+                            {
+                                try
+                                {
+                                    var fileAddr = memory.Read<long>(iter + 0x18);
+
+                                    if (memory.Read<long>(iter + 0x10) != 0 && memory.Read<int>(fileAddr + 0x40) == areaChangeCount)
+                                    {
+                                        var size = memory.Read<int>(fileAddr + 0x20);
+                                        if (size < 7) continue;
+
+                                        var fileNamePointer = memory.Read<long>(iter + 0x10);
+
+                                        text = RemoteMemoryObject.Cache.StringCache.Read($"{nameof(PreloadAlert)}{fileNamePointer}",
+                                            () => memory.ReadStringU(
+                                                fileNamePointer, size * 2));
+
+                                        if (Settings.LoadOnlyMetadata && text[0] != 'M') continue;
+                                        if (text.Contains('@')) text = text.Split('@')[0];
+                                        PreloadDebug.Add(text);
+                                        CheckForPreload(text);
+                                    }
+                                }
+                                catch (Exception e)
+                                {
+                                    DebugWindow.LogError($"{nameof(PreloadAlert)} -> {e}");
+                                }
+                            }
+                        }
+
+                        lock (_locker)
+                        {
+                            DrawAlers = alerts.OrderBy(x => x.Value.Text).Select(x => x.Value).ToList();
+                        }
+                    });
+
+                    working = false;
                 });
-
-                working = false;
-            });            
+            }
 
             yield return null;
         }
@@ -369,7 +442,7 @@ namespace PreloadAlert
             }
             else
             {
-                foreach (var line in DrawAlerts)
+                foreach (var line in DrawAlers)
                 {
                     lastLine = Graphics.DrawText(line.Text, startDrawPoint,
                         line.FastColor?.Invoke() ?? line.Color ?? Settings.DefaultTextColor, FontAlign.Right);
